@@ -75,6 +75,35 @@ VLC can support the same general role through `cvlc` capture/transcode/stream ou
 
 The first mirror implementation should choose one backend, but command and config names should not assume FFmpeg forever.
 
+Levelup has a useful HLS reference implementation at `/Users/auser/Projects/levelup`:
+
+- `src-tauri/src/lib.rs` contains a small built-in HTTP server for HLS assets;
+- `scripts/live-stream/start-macos.sh` builds the FFmpeg HLS command, writes runtime state, and waits until `index.m3u8` exists;
+- `scripts/live-stream/stop-macos.sh` stops tracked FFmpeg/server PIDs and clears generated HLS files;
+- `native/joystick_menu_bridge.c` defines the process/status contract around `stream-start`, `stream-stop`, and `stream-status`;
+- `src/components/stream/StreamCorner.tsx` shows the frontend HLS playback fallback with `hls.js`.
+
+The Brausi implementation should reuse the shape, not the macOS-specific details:
+
+- keep `run/`, `logs/`, and `public/live/` runtime folders;
+- serve `.m3u8`, `.ts`, `.m4s`, and `.mp4` with no-cache headers and `Access-Control-Allow-Origin: *`;
+- track FFmpeg and server PIDs in files for explicit cleanup;
+- write a simple `status.txt` or equivalent structured status file;
+- wait for `public/live/index.m3u8` before reporting the mirror stream as ready.
+
+The Levelup FFmpeg command uses macOS `avfoundation`. Brausi's Linux/Xvfb path should instead use X11 capture:
+
+```text
+ffmpeg -f x11grab -video_size 1024x768 -framerate 30 -i :99 \
+  -vf scale=1280:-2:flags=lanczos,setsar=1,fps=30 \
+  -c:v libx264 -preset ultrafast -tune zerolatency -pix_fmt yuv420p \
+  -b:v 1800k -maxrate 2200k -bufsize 3600k -g 30 -keyint_min 30 -sc_threshold 0 \
+  -f hls -hls_time 1 -hls_list_size 5 -hls_flags delete_segments \
+  <state>/public/live/index.m3u8
+```
+
+Audio should remain optional. On Orange Pi/Linux, the first mirror pass should be video-only unless a concrete ALSA/Pulse/PipeWire source is configured.
+
 All Chromecast support is future work for Brausi. The v1 binary must run without network discovery, Chromecast dependencies, YouTube API keys, Tauri, Electron, or a web UI framework.
 
 ## Command Interface
