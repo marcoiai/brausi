@@ -1,0 +1,5 @@
+/target/
+/.brausi/
+*.log
+*.pid
+*.png
