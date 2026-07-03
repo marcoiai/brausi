@@ -181,12 +181,13 @@ fn start(config: &Config, url: Option<&str>) -> Result<(), String> {
 fn view(config: &Config) -> Result<(), String> {
     ensure_running(config)?;
     ensure_dirs(config)?;
+    let render_size = terminal_size();
 
     loop {
         capture(config)?;
         if config.capture_path.is_file() {
             clear_screen();
-            render(config)?;
+            render(config, &render_size)?;
             io::stdout().flush().map_err(|e| e.to_string())?;
         }
         thread::sleep(config.view_interval);
@@ -303,15 +304,14 @@ fn capture(config: &Config) -> Result<(), String> {
     run_display_command(&config.scrot_bin, &["-o", &output], config)
 }
 
-fn render(config: &Config) -> Result<(), String> {
-    let size = terminal_size();
+fn render(config: &Config, size: &str) -> Result<(), String> {
     let image = config.capture_path.to_string_lossy().to_string();
     let status = Command::new(&config.chafa_bin)
         .args([
             "--symbols=space",
             "--color-space=din99d",
             "--size",
-            &size,
+            size,
             &image,
         ])
         .status()
@@ -509,39 +509,37 @@ fn default_chromium_bin() -> String {
 }
 
 fn terminal_size() -> String {
-    let stty = stty_size();
     let cols = read_env_u32("BRAUSI_RENDER_COLS")
         .or_else(|| read_env_u32("COLUMNS"))
-        .or_else(|| stty.map(|(cols, _)| cols))
+        .or_else(|| tput_value("cols"))
         .unwrap_or(80);
     let lines = read_env_u32("BRAUSI_RENDER_LINES")
         .or_else(|| read_env_u32("LINES"))
-        .or_else(|| stty.map(|(_, lines)| lines))
+        .or_else(|| tput_value("lines"))
         .unwrap_or(24);
 
-    safe_terminal_size(cols, lines)
+    format_terminal_size(cols, lines)
 }
 
 fn read_env_u32(name: &str) -> Option<u32> {
     read_env(name).and_then(|value| value.parse::<u32>().ok())
 }
 
-fn stty_size() -> Option<(u32, u32)> {
-    let output = Command::new("stty").arg("size").output().ok()?;
+fn tput_value(name: &str) -> Option<u32> {
+    let output = Command::new("tput").arg(name).output().ok()?;
     if !output.status.success() {
         return None;
     }
 
-    let text = String::from_utf8_lossy(&output.stdout);
-    let mut parts = text.split_whitespace();
-    let lines = parts.next()?.parse::<u32>().ok()?;
-    let cols = parts.next()?.parse::<u32>().ok()?;
-    Some((cols, lines))
+    String::from_utf8_lossy(&output.stdout)
+        .trim()
+        .parse::<u32>()
+        .ok()
 }
 
-fn safe_terminal_size(cols: u32, lines: u32) -> String {
-    let cols = cols.saturating_sub(1).max(1);
-    let lines = lines.saturating_sub(1).max(1);
+fn format_terminal_size(cols: u32, lines: u32) -> String {
+    let cols = cols.max(1);
+    let lines = lines.max(1);
     format!("{cols}x{lines}")
 }
 
@@ -635,8 +633,8 @@ mod tests {
     }
 
     #[test]
-    fn render_size_leaves_wrap_margin() {
-        assert_eq!(safe_terminal_size(80, 24), "79x23");
-        assert_eq!(safe_terminal_size(1, 1), "1x1");
+    fn render_size_matches_terminal_size() {
+        assert_eq!(format_terminal_size(80, 24), "80x24");
+        assert_eq!(format_terminal_size(0, 0), "1x1");
     }
 }
