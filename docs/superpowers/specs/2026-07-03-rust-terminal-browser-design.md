@@ -29,6 +29,36 @@ The first implementation may shell out to existing tools:
 
 Rust owns process orchestration, command parsing, state paths, cleanup, and error reporting. Later versions can replace individual shell-outs with native X11 or image code if needed, but the core product remains a light browser-control utility.
 
+## Media Player Ideas To Incorporate
+
+The existing media-player project at `/Users/auser/Projects/always-video` should be treated as an architecture reference before implementing the interactive UI. The important concepts to selectively reuse are:
+
+- dynamic picture-in-picture layouts with up to four active views;
+- a focused "current channel" or current surface that receives commands, equivalent to `activeSlotIndex`;
+- YouTube search and insertion into the active channel;
+- optional Chromecast casting for media-oriented channels;
+- layout/compositor logic that can arrange multiple sources without making the core app heavy.
+
+These ideas should influence module boundaries, but they should not make the first CLI version depend on media-player features.
+
+The media player code should not be ported directly. Its current full shell is Vue/Tauri UI code with a large orchestration component. For Brausi, reuse the boundaries instead:
+
+- `Surface`: one browser/media/search/assistant view;
+- `SurfaceId`: stable identifier for routing input and commands;
+- `SurfaceManager`: owns the active surface, add/remove/focus, and the maximum of four visible surfaces;
+- `LayoutManager`: derives single, split, grid, and PiP geometry from visible surfaces;
+- `MediaResolver`: normalizes YouTube URLs/search results and direct media URLs;
+- `CastAdapter`: optional Chromecast scan/play/stop behavior, isolated from the core browser commands.
+
+The useful Chromecast techniques from `always-video` are:
+
+- direct media casting to the default media receiver;
+- YouTube casting as a separate path, because YouTube is not just a direct media URL;
+- local media relay for sources that need the sender machine to proxy HLS/media requests;
+- Chrome mirror helper for sources where direct casting is unreliable.
+
+All Chromecast support is future work for Brausi. The v1 binary must run without network discovery, Chromecast dependencies, YouTube API keys, Tauri, Electron, or a web UI framework.
+
 ## Command Interface
 
 The first binary should expose a CLI named `brausi`:
@@ -75,6 +105,13 @@ The state directory defaults to `~/.brausi`, with runtime files under `~/.brausi
 4. repeat at a configurable interval, defaulting to 200 ms.
 
 The viewport reserves no terminal UI chrome in the first implementation. Address bar and buttons are exposed as commands first. A later interactive mode can render a top bar and translate terminal mouse coordinates into framebuffer pixels.
+
+Future rendering should be modeled around surfaces:
+
+- a browser surface backed by Chromium;
+- optional media surfaces backed by the media-player concepts;
+- a lightweight layout manager that can show one main surface plus PiP surfaces, or a 2x2 grid, up to four total;
+- a focused surface that receives input.
 
 ## Input and Navigation
 
@@ -134,3 +171,14 @@ After the command-based Rust v1 works, add `brausi tui`:
 - optional terminal mouse capture;
 - terminal-cell to framebuffer-coordinate conversion;
 - cleaner live redraw without full-screen flicker where terminal support allows it.
+
+After the TUI has a surface model, add media-player-inspired features:
+
+- dynamic PiP up to four surfaces;
+- YouTube search and insertion into the focused channel;
+- Chromecast casting as an optional output adapter for media-capable channels;
+- direct-media extraction and optional local relay for HLS/media URLs;
+- Chrome mirror helper fallback for sources that cannot be cast directly;
+- input routing so browser commands and media commands do not fight each other.
+
+Chromecast support should remain optional and isolated. The main browser utility should still work without Chromecast libraries, network discovery, or media-player dependencies installed.
