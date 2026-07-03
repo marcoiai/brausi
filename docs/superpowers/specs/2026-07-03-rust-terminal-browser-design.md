@@ -17,6 +17,33 @@ The runtime model should stay friendly to low-power hardware:
 - keep Chromium flags biased toward software rendering and headless-display stability;
 - make external commands configurable because package names differ across distros.
 
+## Build And Deployment
+
+The build target is the Orange Pi PC class of ARMv7 32-bit Linux machines. The project should not assume Apple Silicon, x86_64, Tauri, Electron, or a desktop package manager at runtime.
+
+The preferred deployment shape is:
+
+- one `brausi` Rust binary copied onto the Orange Pi;
+- runtime dependencies installed separately through the board's package manager;
+- state under `~/.brausi` by default, with an override for root-level or appliance-style installs;
+- no generated files written into the source tree during normal use.
+
+Compilation can happen either directly on the Orange Pi or by cross-compiling from a stronger machine. The expected Linux target should be documented as ARMv7 hard-float, such as:
+
+```text
+armv7-unknown-linux-gnueabihf
+```
+
+If deploying as an appliance image rooted at `/`, keep install paths explicit:
+
+```text
+/usr/local/bin/brausi
+/var/lib/brausi
+/var/log/brausi
+```
+
+The first implementation should keep these paths configurable so development can still run from a normal user checkout on macOS or Linux.
+
 ## Runtime Dependencies
 
 The first implementation may shell out to existing tools:
