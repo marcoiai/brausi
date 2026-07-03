@@ -30,25 +30,25 @@ Install optional mirror/cast tools with:
 sudo BRAUSI_BOOTSTRAP_OPTIONAL=1 ./scripts/bootstrap-debian.sh
 ```
 
-## Build Target
+## Install
 
-The expected Rust target is:
-
-```text
-armv7-unknown-linux-gnueabihf
-```
-
-The first implementation has no Rust crate dependencies, so it can be built on
-the board if Rust is installed:
+Brausi's primary implementation is `bin/brausi`, a Bash script. There is no
+build step:
 
 ```sh
-cargo build --release
+sudo install -m 0755 bin/brausi /usr/local/bin/brausi
 ```
 
-For appliance-style deployment:
+Then run:
 
 ```sh
-sudo install -m 0755 target/release/brausi /usr/local/bin/brausi
+brausi start https://example.com
+brausi view
+```
+
+For appliance-style state paths:
+
+```sh
 sudo mkdir -p /var/lib/brausi /var/log/brausi
 ```
 

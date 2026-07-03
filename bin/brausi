@@ -1,0 +1,217 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+DISPLAY_ID="${BRAUSI_DISPLAY:-:99}"
+WIDTH="${BRAUSI_WIDTH:-1024}"
+HEIGHT="${BRAUSI_HEIGHT:-768}"
+DEPTH="${BRAUSI_DEPTH:-24}"
+STATE_DIR="${BRAUSI_STATE_DIR:-$HOME/.brausi}"
+RUN_DIR="$STATE_DIR/run"
+PROFILE_DIR="$STATE_DIR/profile"
+LIVE_PNG="$RUN_DIR/live.png"
+
+XVFB_BIN="${BRAUSI_XVFB:-Xvfb}"
+CHROMIUM_BIN="${BRAUSI_CHROMIUM:-chromium}"
+SCROT_BIN="${BRAUSI_SCROT:-scrot}"
+CHAFA_BIN="${BRAUSI_CHAFA:-chafa}"
+XDOTOOL_BIN="${BRAUSI_XDOTOOL:-xdotool}"
+VIEW_INTERVAL="${BRAUSI_VIEW_INTERVAL:-0.2}"
+
+ensure_dirs() {
+  mkdir -p "$RUN_DIR" "$PROFILE_DIR"
+}
+
+pid_file() {
+  printf '%s/%s.pid\n' "$RUN_DIR" "$1"
+}
+
+read_pid() {
+  local file
+  file="$(pid_file "$1")"
+  [[ -f "$file" ]] && cat "$file"
+}
+
+is_alive() {
+  local pid="${1:-}"
+  [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null
+}
+
+kill_tracked() {
+  local name pid
+  for name in chromium xvfb; do
+    pid="$(read_pid "$name" || true)"
+    if is_alive "$pid"; then
+      kill "$pid" 2>/dev/null || true
+      sleep 0.4
+      is_alive "$pid" && kill -9 "$pid" 2>/dev/null || true
+    fi
+    rm -f "$(pid_file "$name")"
+  done
+}
+
+start() {
+  local url="${1:-}"
+  local chromium_args=(
+    --kiosk
+    --no-first-run
+    --disable-gpu
+    --no-sandbox
+    --disable-dev-shm-usage
+    --mute-audio
+    --window-size="${WIDTH},${HEIGHT}"
+    --disable-software-rasterizer
+    --disable-gpu-sandbox
+    --use-gl=swiftshader
+  )
+
+  ensure_dirs
+  kill_tracked
+  rm -f "$LIVE_PNG"
+
+  "$XVFB_BIN" "$DISPLAY_ID" -screen 0 "${WIDTH}x${HEIGHT}x${DEPTH}" &
+  echo "$!" > "$(pid_file xvfb)"
+  sleep "${BRAUSI_XVFB_WAIT:-5}"
+
+  [[ -n "$url" ]] && chromium_args+=("$url")
+
+  DISPLAY="$DISPLAY_ID" "$CHROMIUM_BIN" "${chromium_args[@]}" &
+  echo "$!" > "$(pid_file chromium)"
+
+  sleep "${BRAUSI_CHROMIUM_WAIT:-12}"
+  echo "started"
+  echo "display=$DISPLAY_ID"
+  echo "size=${WIDTH}x${HEIGHT}"
+  echo "state=$STATE_DIR"
+}
+
+view() {
+  ensure_dirs
+  while true; do
+    if ! DISPLAY="$DISPLAY_ID" "$SCROT_BIN" -u -o "$LIVE_PNG" >/dev/null 2>&1; then
+      DISPLAY="$DISPLAY_ID" "$SCROT_BIN" -o "$LIVE_PNG" >/dev/null 2>&1
+    fi
+
+    if [[ -s "$LIVE_PNG" ]]; then
+      clear
+      "$CHAFA_BIN" \
+        --symbols=space \
+        --color-space=din99d \
+        --size="${BRAUSI_RENDER_COLS:-$(tput cols)}x${BRAUSI_RENDER_LINES:-$(tput lines)}" \
+        "$LIVE_PNG"
+    fi
+
+    sleep "$VIEW_INTERVAL"
+  done
+}
+
+require_xy() {
+  if [[ $# -ne 2 ]]; then
+    echo "usage: brausi $COMMAND <x> <y>" >&2
+    exit 2
+  fi
+}
+
+xdotool_display() {
+  DISPLAY="$DISPLAY_ID" "$XDOTOOL_BIN" "$@"
+}
+
+status() {
+  local xvfb_pid chromium_pid
+  xvfb_pid="$(read_pid xvfb || true)"
+  chromium_pid="$(read_pid chromium || true)"
+  echo "state_dir=$STATE_DIR"
+  echo "display=$DISPLAY_ID"
+  if is_alive "$xvfb_pid"; then
+    echo "xvfb=running pid=$xvfb_pid"
+  else
+    echo "xvfb=stopped"
+  fi
+  if is_alive "$chromium_pid"; then
+    echo "chromium=running pid=$chromium_pid"
+  else
+    echo "chromium=stopped"
+  fi
+}
+
+help() {
+  cat <<'USAGE'
+brausi - lightweight terminal browser controller
+
+Usage:
+  brausi start [url]
+  brausi view
+  brausi click <x> <y>
+  brausi move <x> <y>
+  brausi down <x> <y>
+  brausi up <x> <y>
+  brausi type <text>
+  brausi go <url>
+  brausi back
+  brausi forward
+  brausi reload
+  brausi status
+  brausi stop
+USAGE
+}
+
+COMMAND="${1:-help}"
+shift || true
+
+case "$COMMAND" in
+  start)
+    start "${1:-}"
+    ;;
+  view)
+    view
+    ;;
+  click)
+    require_xy "$@"
+    xdotool_display mousemove "$1" "$2" click 1
+    ;;
+  move)
+    require_xy "$@"
+    xdotool_display mousemove "$1" "$2"
+    ;;
+  down|mousedown)
+    require_xy "$@"
+    xdotool_display mousemove "$1" "$2" mousedown 1
+    ;;
+  up|mouseup)
+    require_xy "$@"
+    xdotool_display mousemove "$1" "$2" mouseup 1
+    ;;
+  type)
+    xdotool_display type "$*"
+    xdotool_display key Return
+    ;;
+  go)
+    xdotool_display key ctrl+l
+    xdotool_display type "$*"
+    xdotool_display key Return
+    ;;
+  back)
+    xdotool_display key Alt+Left
+    ;;
+  forward)
+    xdotool_display key Alt+Right
+    ;;
+  reload)
+    xdotool_display key ctrl+r
+    ;;
+  status)
+    status
+    ;;
+  stop)
+    kill_tracked
+    rm -f "$LIVE_PNG"
+    echo "stopped"
+    ;;
+  help|-h|--help)
+    help
+    ;;
+  *)
+    echo "unknown command: $COMMAND" >&2
+    help >&2
+    exit 2
+    ;;
+esac

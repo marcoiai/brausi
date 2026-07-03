@@ -1,35 +1,38 @@
 # Brausi
 
-Brausi is a lightweight terminal browser controller. It does not implement a
-browser engine. It starts Chromium in `Xvfb`, renders the virtual display into a
-terminal with `scrot`/`chafa`, and sends input through `xdotool`.
+Brausi is a lightweight terminal browser controller implemented as a Bash
+script. It does not implement a browser engine. It starts Chromium in `Xvfb`,
+renders the virtual display into a terminal with `scrot`/`chafa`, and sends
+input through `xdotool`.
 
 ## Commands
 
 ```sh
-brausi start [url]
-brausi view
-brausi click <x> <y>
-brausi move <x> <y>
-brausi down <x> <y>
-brausi up <x> <y>
-brausi type <text>
-brausi go <url>
-brausi back
-brausi forward
-brausi reload
-brausi status
-brausi stop
+./bin/brausi start [url]
+./bin/brausi view
+./bin/brausi click <x> <y>
+./bin/brausi move <x> <y>
+./bin/brausi down <x> <y>
+./bin/brausi up <x> <y>
+./bin/brausi type <text>
+./bin/brausi go <url>
+./bin/brausi back
+./bin/brausi forward
+./bin/brausi reload
+./bin/brausi status
+./bin/brausi stop
 ```
 
 Coordinates are framebuffer pixels. With the default display size, valid values
 are `x=0..1023` and `y=0..767`.
 
-## Local Build
+## Install
 
 ```sh
-cargo build --release
+sudo install -m 0755 bin/brausi /usr/local/bin/brausi
 ```
+
+There is no build step for the primary implementation.
 
 ## Runtime Dependencies
 
@@ -73,21 +76,28 @@ BRAUSI_XVFB=Xvfb
 BRAUSI_SCROT=scrot
 BRAUSI_CHAFA=chafa
 BRAUSI_XDOTOOL=xdotool
-BRAUSI_RENDER_COLS=auto
-BRAUSI_RENDER_LINES=auto
+BRAUSI_VIEW_INTERVAL=0.2
 ```
+
+`BRAUSI_RENDER_COLS` and `BRAUSI_RENDER_LINES` are optional overrides. When
+unset, `view` uses `tput cols` and `tput lines`, like the original shell loop.
 
 If your distro uses `chromium-browser`:
 
 ```sh
-BRAUSI_CHROMIUM=chromium-browser brausi start https://example.com
+BRAUSI_CHROMIUM=chromium-browser ./bin/brausi start https://example.com
 ```
 
 If terminal output wraps or looks skewed, force a smaller render area:
 
 ```sh
-BRAUSI_RENDER_COLS=79 BRAUSI_RENDER_LINES=23 brausi view
+BRAUSI_RENDER_COLS=79 BRAUSI_RENDER_LINES=23 ./bin/brausi view
 ```
+
+## Rust Prototype
+
+The repository still contains the initial Rust prototype for reference, but the
+recommended command is the Bash script in `bin/brausi`.
 
 ## Orange Pi
 
