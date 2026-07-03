@@ -73,12 +73,20 @@ BRAUSI_XVFB=Xvfb
 BRAUSI_SCROT=scrot
 BRAUSI_CHAFA=chafa
 BRAUSI_XDOTOOL=xdotool
+BRAUSI_RENDER_COLS=auto
+BRAUSI_RENDER_LINES=auto
 ```
 
 If your distro uses `chromium-browser`:
 
 ```sh
 BRAUSI_CHROMIUM=chromium-browser brausi start https://example.com
+```
+
+If terminal output wraps or looks skewed, force a smaller render area:
+
+```sh
+BRAUSI_RENDER_COLS=79 BRAUSI_RENDER_LINES=23 brausi view
 ```
 
 ## Orange Pi

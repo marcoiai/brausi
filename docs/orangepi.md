@@ -75,6 +75,12 @@ brausi status
 brausi view
 ```
 
+If the rendered image wraps across lines, force a smaller terminal render size:
+
+```sh
+BRAUSI_RENDER_COLS=79 BRAUSI_RENDER_LINES=23 brausi view
+```
+
 In another terminal:
 
 ```sh

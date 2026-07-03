@@ -509,12 +509,40 @@ fn default_chromium_bin() -> String {
 }
 
 fn terminal_size() -> String {
-    let cols = read_env("COLUMNS").and_then(|value| value.parse::<u32>().ok());
-    let lines = read_env("LINES").and_then(|value| value.parse::<u32>().ok());
-    match (cols, lines) {
-        (Some(cols), Some(lines)) if cols > 0 && lines > 0 => format!("{cols}x{lines}"),
-        _ => "80x24".to_string(),
+    let stty = stty_size();
+    let cols = read_env_u32("BRAUSI_RENDER_COLS")
+        .or_else(|| read_env_u32("COLUMNS"))
+        .or_else(|| stty.map(|(cols, _)| cols))
+        .unwrap_or(80);
+    let lines = read_env_u32("BRAUSI_RENDER_LINES")
+        .or_else(|| read_env_u32("LINES"))
+        .or_else(|| stty.map(|(_, lines)| lines))
+        .unwrap_or(24);
+
+    safe_terminal_size(cols, lines)
+}
+
+fn read_env_u32(name: &str) -> Option<u32> {
+    read_env(name).and_then(|value| value.parse::<u32>().ok())
+}
+
+fn stty_size() -> Option<(u32, u32)> {
+    let output = Command::new("stty").arg("size").output().ok()?;
+    if !output.status.success() {
+        return None;
     }
+
+    let text = String::from_utf8_lossy(&output.stdout);
+    let mut parts = text.split_whitespace();
+    let lines = parts.next()?.parse::<u32>().ok()?;
+    let cols = parts.next()?.parse::<u32>().ok()?;
+    Some((cols, lines))
+}
+
+fn safe_terminal_size(cols: u32, lines: u32) -> String {
+    let cols = cols.saturating_sub(1).max(1);
+    let lines = lines.saturating_sub(1).max(1);
+    format!("{cols}x{lines}")
 }
 
 fn clear_screen() {
@@ -549,7 +577,9 @@ Environment:
   BRAUSI_XVFB=Xvfb
   BRAUSI_SCROT=scrot
   BRAUSI_CHAFA=chafa
-  BRAUSI_XDOTOOL=xdotool"
+  BRAUSI_XDOTOOL=xdotool
+  BRAUSI_RENDER_COLS=auto
+  BRAUSI_RENDER_LINES=auto"
     );
 }
 
@@ -602,5 +632,11 @@ mod tests {
         assert!(validate_coords(&config, 1023, 767).is_ok());
         assert!(validate_coords(&config, 1024, 767).is_err());
         assert!(validate_coords(&config, 1023, 768).is_err());
+    }
+
+    #[test]
+    fn render_size_leaves_wrap_margin() {
+        assert_eq!(safe_terminal_size(80, 24), "79x23");
+        assert_eq!(safe_terminal_size(1, 1), "1x1");
     }
 }
