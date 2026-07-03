@@ -300,7 +300,7 @@ fn spawn_chromium(config: &Config, url: Option<&str>) -> Result<Child, String> {
 
 fn capture(config: &Config) -> Result<(), String> {
     let output = config.capture_path.to_string_lossy().to_string();
-    run_display_command(&config.scrot_bin, &["-u", "-o", &output], config)
+    run_display_command(&config.scrot_bin, &["-o", &output], config)
 }
 
 fn render(config: &Config) -> Result<(), String> {
