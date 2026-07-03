@@ -57,6 +57,24 @@ The useful Chromecast techniques from `always-video` are:
 - local media relay for sources that need the sender machine to proxy HLS/media requests;
 - Chrome mirror helper for sources where direct casting is unreliable.
 
+Brausi should also consider an FFmpeg-based mirror path for Chromecast. In that mode, FFmpeg captures the same Xvfb display used by Chromium and encodes it as a LAN-served stream. The terminal renderer still uses `scrot`/`chafa`; FFmpeg is only for casting or recording the browser surface.
+
+The intended flow is:
+
+1. capture Xvfb with `ffmpeg -f x11grab -video_size 1024x768 -i :99`;
+2. encode to a Chromecast-friendly format such as H.264/AAC;
+3. publish a short HLS stream from Brausi's local HTTP server;
+4. ask the Chromecast Default Media Receiver to load `http://<lan-ip>:<port>/.../index.m3u8`.
+
+This is heavier than direct media or YouTube casting, so it should be a fallback for arbitrary browser pages, dashboards, sites without direct media URLs, or cases where the user explicitly asks to mirror the current browser surface.
+
+VLC can support the same general role through `cvlc` capture/transcode/stream output and may also help as a local debugging player. The architecture should keep this behind a `MirrorStreamer` boundary:
+
+- `ffmpeg` backend: preferred first because HLS output is deterministic and easy to serve/control from Rust;
+- `vlc`/`cvlc` backend: optional fallback when VLC is already available or when its Chromecast/rendering support is useful on a specific machine.
+
+The first mirror implementation should choose one backend, but command and config names should not assume FFmpeg forever.
+
 All Chromecast support is future work for Brausi. The v1 binary must run without network discovery, Chromecast dependencies, YouTube API keys, Tauri, Electron, or a web UI framework.
 
 ## Command Interface
@@ -178,6 +196,8 @@ After the TUI has a surface model, add media-player-inspired features:
 - YouTube search and insertion into the focused channel;
 - Chromecast casting as an optional output adapter for media-capable channels;
 - direct-media extraction and optional local relay for HLS/media URLs;
+- FFmpeg-based Xvfb mirror stream for arbitrary browser surfaces;
+- optional VLC/cvlc mirror backend behind the same mirror-streaming interface;
 - Chrome mirror helper fallback for sources that cannot be cast directly;
 - input routing so browser commands and media commands do not fight each other.
 
